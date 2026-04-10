@@ -1,16 +1,38 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import Navbar from "@/components/Navbar";
+import HeroSection from "@/components/HeroSection";
+import ProblemSection from "@/components/ProblemSection";
+import SolutionSection from "@/components/SolutionSection";
+import HowItWorks from "@/components/HowItWorks";
+import FeaturesSection from "@/components/FeaturesSection";
+import ComparisonTable from "@/components/ComparisonTable";
+import SavingsDashboard from "@/components/SavingsDashboard";
+import LocalStoresSection from "@/components/LocalStoresSection";
+import TrustSection from "@/components/TrustSection";
+import FAQSection from "@/components/FAQSection";
+import Footer from "@/components/Footer";
+import GroceryInput from "@/components/GroceryInput";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const [compareOpen, setCompareOpen] = useState(false);
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen">
+      <Navbar />
+      <HeroSection onStartComparing={() => setCompareOpen(true)} />
+      <ProblemSection />
+      <SolutionSection />
+      <HowItWorks />
+      <FeaturesSection />
+      <ComparisonTable />
+      <SavingsDashboard />
+      <LocalStoresSection />
+      <TrustSection />
+      <FAQSection />
+      <Footer />
+      <GroceryInput open={compareOpen} onOpenChange={setCompareOpen} />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
