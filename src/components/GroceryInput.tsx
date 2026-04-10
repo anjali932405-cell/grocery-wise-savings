@@ -1,20 +1,28 @@
 import { useState } from "react";
-import { Plus, X, ShoppingCart } from "lucide-react";
+import { Plus, X, ShoppingCart, Search, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { sampleGroceryItems, platformFees } from "@/data/mockData";
+import { searchGroceryPrices, type SearchResult } from "@/lib/api/googleSearch";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }
 
+type View = "input" | "results" | "search";
+
 const GroceryInput = ({ open, onOpenChange }: Props) => {
   const [items, setItems] = useState<string[]>(["Rice 5kg", "Atta 10kg", "Oil 5L"]);
   const [input, setInput] = useState("");
-  const [showResults, setShowResults] = useState(false);
+  const [view, setView] = useState<View>("input");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
 
   const addItem = () => {
     const val = input.trim();
@@ -27,7 +35,29 @@ const GroceryInput = ({ open, onOpenChange }: Props) => {
   const removeItem = (item: string) => setItems(items.filter((i) => i !== item));
 
   const handleCompare = () => {
-    if (items.length > 0) setShowResults(true);
+    if (items.length > 0) setView("results");
+  };
+
+  const handleSearchOnline = async () => {
+    const query = items.join(", ");
+    setSearchQuery(query);
+    setSearchLoading(true);
+    setView("search");
+
+    try {
+      const res = await searchGroceryPrices(query);
+      if (res.success && res.results) {
+        setSearchResults(res.results);
+      } else {
+        toast({ title: "Search failed", description: res.error || "Could not fetch results", variant: "destructive" });
+        setSearchResults([]);
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to search prices online", variant: "destructive" });
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
   const totals = {
@@ -44,11 +74,13 @@ const GroceryInput = ({ open, onOpenChange }: Props) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display">
             <ShoppingCart className="h-5 w-5 text-primary" />
-            {showResults ? "Comparison Results" : "Enter Your Grocery List"}
+            {view === "input" && "Enter Your Grocery List"}
+            {view === "results" && "Comparison Results"}
+            {view === "search" && "Online Price Search"}
           </DialogTitle>
         </DialogHeader>
 
-        {!showResults ? (
+        {view === "input" && (
           <div className="space-y-4">
             <div className="flex gap-2">
               <Input
@@ -72,11 +104,18 @@ const GroceryInput = ({ open, onOpenChange }: Props) => {
               ))}
             </div>
             {items.length === 0 && <p className="text-center text-sm text-muted-foreground">Add items to your grocery list to start comparing.</p>}
-            <Button className="w-full bg-gradient-primary text-primary-foreground" onClick={handleCompare} disabled={items.length === 0}>
-              Compare Prices
-            </Button>
+            <div className="flex gap-2">
+              <Button className="flex-1 bg-gradient-primary text-primary-foreground" onClick={handleCompare} disabled={items.length === 0}>
+                Compare Prices
+              </Button>
+              <Button variant="outline" className="flex-1 gap-2" onClick={handleSearchOnline} disabled={items.length === 0}>
+                <Search className="h-4 w-4" /> Search Online
+              </Button>
+            </div>
           </div>
-        ) : (
+        )}
+
+        {view === "results" && (
           <div className="space-y-4">
             <div className="rounded-lg border bg-primary/5 p-4 text-center">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">Best Total Price</p>
@@ -97,7 +136,50 @@ const GroceryInput = ({ open, onOpenChange }: Props) => {
             <div className="rounded-lg border bg-accent/10 p-3 text-center">
               <p className="text-sm font-medium">You save <span className="font-bold text-primary">₹{Math.max(...Object.values(totals)) - cheapest}</span> vs the most expensive option!</p>
             </div>
-            <Button variant="outline" className="w-full" onClick={() => setShowResults(false)}>← Edit List</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setView("input")}>← Edit List</Button>
+              <Button variant="outline" className="flex-1 gap-2" onClick={handleSearchOnline}>
+                <Search className="h-4 w-4" /> Search Online
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === "search" && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Searching prices for: <span className="font-medium text-foreground">{searchQuery}</span>
+            </p>
+            {searchLoading ? (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Searching grocery prices online…</p>
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="space-y-3">
+                {searchResults.map((r, i) => (
+                  <a
+                    key={i}
+                    href={r.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border p-3 transition-colors hover:border-primary hover:bg-primary/5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug line-clamp-2">{r.title}</p>
+                        <p className="mt-1 text-xs text-primary">{r.displayLink}</p>
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{r.snippet}</p>
+                      </div>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-sm text-muted-foreground">No results found. Try a different grocery list.</p>
+            )}
+            <Button variant="outline" className="w-full" onClick={() => setView("input")}>← Back to List</Button>
           </div>
         )}
       </DialogContent>
