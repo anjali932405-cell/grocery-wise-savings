@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search as SearchIcon, Loader2, ExternalLink } from "lucide-react";
+import { Search as SearchIcon, Loader2, ExternalLink, Lightbulb } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -19,12 +19,32 @@ const SearchPage = () => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [tips, setTips] = useState<string[]>([]);
+  const [tipsLoading, setTipsLoading] = useState(false);
   const { toast } = useToast();
+
+  const fetchTips = async (searchResults: SearchResult[]) => {
+    setTipsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("summarize-tips", {
+        body: { results: searchResults },
+      });
+      if (error) throw error;
+      if (data?.success && data.tips) {
+        setTips(data.tips);
+      }
+    } catch {
+      console.error("Failed to fetch tips");
+    } finally {
+      setTipsLoading(false);
+    }
+  };
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(true);
+    setTips([]);
 
     try {
       const { data, error } = await supabase.functions.invoke("google-search", {
@@ -35,6 +55,9 @@ const SearchPage = () => {
 
       if (data?.success && data.results) {
         setResults(data.results);
+        if (data.results.length > 0) {
+          fetchTips(data.results);
+        }
       } else {
         toast({ title: "Search failed", description: data?.error || "No results", variant: "destructive" });
         setResults([]);
@@ -72,7 +95,35 @@ const SearchPage = () => {
           </Button>
         </div>
 
-        <div className="mt-8 space-y-4">
+        {/* AI Tips Section */}
+        {(tipsLoading || tips.length > 0) && (
+          <div className="mt-6">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Lightbulb className="h-5 w-5 text-primary" />
+                  AI-Powered Savings Tips
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {tipsLoading ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Generating tips…</p>
+                  </div>
+                ) : (
+                  <ol className="list-decimal space-y-2 pl-5">
+                    {tips.map((tip, i) => (
+                      <li key={i} className="text-sm text-foreground">{tip}</li>
+                    ))}
+                  </ol>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        <div className="mt-6 space-y-4">
           {loading && (
             <div className="flex flex-col items-center gap-3 py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
