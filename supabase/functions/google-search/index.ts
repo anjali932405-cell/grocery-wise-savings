@@ -18,51 +18,42 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+    const apiKey = Deno.env.get('SERPAPI_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'GOOGLE_SEARCH_API_KEY not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const cx = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
-    if (!cx) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'GOOGLE_SEARCH_ENGINE_ID not configured' }),
+        JSON.stringify({ success: false, error: 'SERPAPI_API_KEY not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const searchQuery = `${query} price India buy online`;
-    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(searchQuery)}&num=${Math.min(num, 10)}`;
+    const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(searchQuery)}&gl=in&hl=en&num=${Math.min(num, 10)}&api_key=${apiKey}`;
 
-    console.log('Searching Google for:', searchQuery);
+    console.log('Searching SerpAPI for:', searchQuery);
 
     const response = await fetch(url);
     const data = await response.json();
 
-    if (!response.ok) {
-      console.error('Google API error:', JSON.stringify(data));
+    if (!response.ok || data.error) {
+      console.error('SerpAPI error:', JSON.stringify(data.error || data));
       return new Response(
-        JSON.stringify({ success: false, error: data.error?.message || `Google API error [${response.status}]` }),
+        JSON.stringify({ success: false, error: data.error || `SerpAPI error [${response.status}]` }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse results into a cleaner format
-    const results = (data.items || []).map((item: any) => ({
+    const results = (data.organic_results || []).slice(0, num).map((item: any) => ({
       title: item.title,
       link: item.link,
-      snippet: item.snippet,
-      displayLink: item.displayLink,
-      image: item.pagemap?.cse_image?.[0]?.src || null,
+      snippet: item.snippet || '',
+      displayLink: item.displayed_link || new URL(item.link).hostname,
+      image: item.thumbnail || null,
     }));
 
     console.log(`Found ${results.length} results`);
 
     return new Response(
-      JSON.stringify({ success: true, results, totalResults: data.searchInformation?.totalResults }),
+      JSON.stringify({ success: true, results, totalResults: data.search_information?.total_results?.toString() }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
