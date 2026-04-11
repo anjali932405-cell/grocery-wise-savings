@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { query, num = 5 } = await req.json();
+    const { query } = await req.json();
 
     if (!query || typeof query !== 'string') {
       return new Response(
@@ -18,51 +18,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
-    const cx = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
+    const API_KEY = Deno.env.get('GOOGLE_API_KEY') || Deno.env.get('GOOGLE_SEARCH_API_KEY');
+    const CX = Deno.env.get('GOOGLE_CX') || Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
 
-    if (!apiKey || !cx) {
+    if (!API_KEY || !CX) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Google Custom Search API credentials not configured' }),
+        JSON.stringify({ success: false, error: 'Google API credentials not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const searchQuery = `${query} price India buy online`;
-    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(searchQuery)}&gl=in&hl=en&num=${Math.min(num, 10)}`;
+    const url = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(query)}&key=${API_KEY}&cx=${CX}`;
 
-    console.log('Searching Google Custom Search for:', searchQuery);
-
+    console.log('Searching for:', query);
     const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok || data.error) {
       console.error('Google Search error:', JSON.stringify(data.error || data));
       return new Response(
-        JSON.stringify({ success: false, error: data.error?.message || `Google Search error [${response.status}]` }),
+        JSON.stringify({ success: false, error: data.error?.message || 'Search failed' }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const results = (data.items || []).slice(0, num).map((item: any) => ({
+    const results = (data.items || []).map((item: any) => ({
       title: item.title,
       link: item.link,
       snippet: item.snippet || '',
-      displayLink: item.displayLink || new URL(item.link).hostname,
+      displayLink: item.displayLink || '',
       image: item.pagemap?.cse_thumbnail?.[0]?.src || null,
     }));
 
-    console.log(`Found ${results.length} results`);
-
     return new Response(
-      JSON.stringify({ success: true, results, totalResults: data.searchInformation?.totalResults }),
+      JSON.stringify({ success: true, results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Search error:', error);
-    const msg = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ success: false, error: msg }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
