@@ -18,42 +18,44 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('SERPAPI_API_KEY');
-    if (!apiKey) {
+    const apiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+    const cx = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID');
+
+    if (!apiKey || !cx) {
       return new Response(
-        JSON.stringify({ success: false, error: 'SERPAPI_API_KEY not configured' }),
+        JSON.stringify({ success: false, error: 'Google Custom Search API credentials not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const searchQuery = `${query} price India buy online`;
-    const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(searchQuery)}&gl=in&hl=en&num=${Math.min(num, 10)}&api_key=${apiKey}`;
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(searchQuery)}&gl=in&hl=en&num=${Math.min(num, 10)}`;
 
-    console.log('Searching SerpAPI for:', searchQuery);
+    console.log('Searching Google Custom Search for:', searchQuery);
 
     const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok || data.error) {
-      console.error('SerpAPI error:', JSON.stringify(data.error || data));
+      console.error('Google Search error:', JSON.stringify(data.error || data));
       return new Response(
-        JSON.stringify({ success: false, error: data.error || `SerpAPI error [${response.status}]` }),
+        JSON.stringify({ success: false, error: data.error?.message || `Google Search error [${response.status}]` }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const results = (data.organic_results || []).slice(0, num).map((item: any) => ({
+    const results = (data.items || []).slice(0, num).map((item: any) => ({
       title: item.title,
       link: item.link,
       snippet: item.snippet || '',
-      displayLink: item.displayed_link || new URL(item.link).hostname,
-      image: item.thumbnail || null,
+      displayLink: item.displayLink || new URL(item.link).hostname,
+      image: item.pagemap?.cse_thumbnail?.[0]?.src || null,
     }));
 
     console.log(`Found ${results.length} results`);
 
     return new Response(
-      JSON.stringify({ success: true, results, totalResults: data.search_information?.total_results?.toString() }),
+      JSON.stringify({ success: true, results, totalResults: data.searchInformation?.totalResults }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
